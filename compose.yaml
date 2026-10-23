@@ -1,0 +1,133 @@
+# SPDX-FileCopyrightText: 2026 Vendel
+# SPDX-License-Identifier: Apache-2.0
+#
+# DaVROS CTF, "Low Battery".
+#
+#   docker compose up
+
+name: davros-ctf
+
+# Baseline posture, inlined from simulated_target/posture/target.env.
+x-posture: &posture
+  TARGET_REPROVISION: "true"
+  TARGET_SECURITY_ENABLE: "true"
+  TARGET_SECURITY_STRATEGY: Enforce
+  TARGET_DOMAIN_ID: "42"
+  TARGET_ENCLAVE_OVERRIDE: ""
+  TARGET_KEYSTORE_MODE: "0750"
+  TARGET_OMIT_PLUGINS: "false"
+  TARGET_SHARED_IDENTITY: "false"
+  TARGET_KEY_MODE: "0400"
+  TARGET_KEY_PASSPHRASE: ""
+  TARGET_LEAK_PASSPHRASE: "false"
+  TARGET_CRL: "true"
+  TARGET_KEY_AGREEMENT: AUTO
+  TARGET_LEGACY_ALGORITHMS: "false"
+  TARGET_CERT_DAYS: "365"
+  TARGET_KEY_TYPE: ec
+  TARGET_KEY_BITS: "2048"
+  TARGET_RTPS_PROTECTION: ENCRYPT
+  TARGET_DISCOVERY_PROTECTION: ENCRYPT
+  TARGET_LIVELINESS_PROTECTION: ENCRYPT
+  TARGET_METADATA_PROTECTION: ENCRYPT
+  TARGET_DATA_PROTECTION: ENCRYPT
+  TARGET_ORIGIN_AUTH: "true"
+  TARGET_ALLOW_UNAUTHENTICATED: "false"
+  TARGET_JOIN_AC: "true"
+  TARGET_READ_AC: "true"
+  TARGET_WRITE_AC: "true"
+  TARGET_TOPIC_DISCOVERY_PROTECTION: "true"
+  TARGET_TOPIC_LIVELINESS_PROTECTION: "true"
+  TARGET_WILDCARD_FIRST: "false"
+  TARGET_DOMAINS_RANGE: ""
+  TARGET_PERMS_DEFAULT: DENY
+  TARGET_PERMS_DAYS: "365"
+  TARGET_SUBJECT_WILDCARD: "false"
+  TARGET_SHARED_ENCLAVE: "false"
+  TARGET_RELAY_GRANT: "false"
+  TARGET_SEPARATE_CA: "true"
+  TARGET_SIGN_GOVERNANCE: "true"
+  TARGET_SIGN_PERMISSIONS: "true"
+  TARGET_STRIP_CA_KEY: "true"
+  TARGET_PROFILE_WRITABLE: "false"
+  TARGET_ROSBRIDGE: "false"
+  TARGET_ROSBRIDGE_ENCLAVE: /mission_planner
+  TARGET_INITIAL_PEER: ""
+
+services:
+  station:
+    image: ghcr.io/vendel-sec/davros-ctf-station:jazzy
+    container_name: ctf-station
+    hostname: ctf-station
+    environment:
+      <<: *posture
+      ROS_DOMAIN_ID: "42"
+      RMW_IMPLEMENTATION: rmw_fastrtps_cpp
+      TARGET_REPROVISION: "false"
+      TARGET_GRANT_OVERREACH: /scan_publisher,/ros2cli
+      TARGET_HANDOUT_ENCLAVE: /scan_publisher,/ros2cli
+      TARGET_OPERATOR_ENCLAVE: "true"
+      TARGET_STATION_ENCLAVE: "true"
+    volumes:
+      - keystore:/keystore
+      - handout:/handout
+    ports:
+      - "8000:8000"
+      - "8090:8090"
+    networks: [ctfnet]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "test", "-f", "/keystore/.ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
+
+  robot:
+    image: ghcr.io/vendel-sec/davros-ctf-robot:jazzy
+    container_name: ctf-robot
+    hostname: ctf-robot
+    depends_on:
+      station: {condition: service_healthy}
+    environment:
+      <<: *posture
+      TARGET_GEOFENCE_RADIUS: "3.0"
+      TEAM_SEED: ${TEAM_SEED:-davros}
+    volumes:
+      - keystore:/keystore:ro
+    networks: [ctfnet]
+    restart: "no"
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "simulated_target.robot.graph"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
+
+  player:
+    image: ghcr.io/vendel-sec/davros-ctf-player:jazzy
+    container_name: ctf-player
+    hostname: ctf-player
+    depends_on:
+      robot: {condition: service_healthy}
+    command: ["sleep", "infinity"]
+    stdin_open: true
+    tty: true
+    environment:
+      ROS_DOMAIN_ID: "42"
+      RMW_IMPLEMENTATION: rmw_fastrtps_cpp
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+    networks: [ctfnet]
+    restart: unless-stopped
+
+networks:
+  ctfnet:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: ctfnet0
+
+volumes:
+  keystore:
+  handout:

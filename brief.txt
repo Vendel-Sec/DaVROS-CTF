@@ -1,0 +1,61 @@
+==================================================================
+ DaVROS CTF, "Low Battery"
+==================================================================
+
+ A survey UGV is stranded deep in a remote site on its last charge.
+ It was sent to recover a lost artifact but stalled as the battery 
+ ran low. Its map is live, but the robot sits in fog and cannot see 
+ far.
+
+ Far away, an operator watches it on a display at
+ http://localhost:8090. That display is all they have, and they
+ cannot drive from it. As far as they are concerned, the run is over.
+
+ It is not over. On what charge is left, drive the robot out into the
+ fog yourself, explore the map, and reach the spot it was sent for. 
+ There is more than one way to get it moving.
+
+ You are on the robot's network segment, with no account and no
+ credential of any kind. Try to enumerate:
+
+   ros2 node list
+   ros2 topic list -t
+   ros2 param list /<node>
+
+ Nothing. So first you need a credential.
+ Find out what else is on this network.
+
+ Once you have one, point ROS at it:
+
+   export ROS_SECURITY_KEYSTORE=<where you put it>
+   export ROS_SECURITY_ENCLAVE_OVERRIDE=/<the enclave name>
+   export ROS_SECURITY_ENABLE=true ROS_SECURITY_STRATEGY=Enforce
+   ros2 daemon stop
+
+ To drive with the keyboard, the teleop node has to carry a name
+ the credential accepts:
+
+   ros2 run teleop_twist_keyboard teleop_twist_keyboard \
+     --ros-args -r __node:=_ros2cli_teleop
+
+ ------------------------------------------------------------------
+ Tools on this machine
+
+   Network    nmap, curl, ssh
+   Files      tar
+   ROS 2      ros2 CLI, teleop_twist_keyboard, python3 + rclpy
+   Cracking   hydra, wordlist at /usr/share/wordlists/rockyou.txt
+
+ ------------------------------------------------------------------
+ Documentation
+
+   ros2 CLI, topics, services, parameters
+   https://docs.ros.org/en/jazzy/Tutorials/Beginner-CLI-Tools.html
+
+   SROS2: keystores, enclaves, the ROS_SECURITY_* variables
+   https://docs.ros.org/en/jazzy/Tutorials/Advanced/Security/Introducing-ros2-security.html
+
+   What is inside an enclave, and what each file is for
+   https://docs.ros.org/en/jazzy/Tutorials/Advanced/Security/The-Keystore.html
+
+==================================================================
